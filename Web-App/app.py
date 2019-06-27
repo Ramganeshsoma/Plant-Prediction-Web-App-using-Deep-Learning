@@ -1,32 +1,24 @@
-from flask import Flask, render_template
-import base64
 import numpy as np
-import io
-from PIL import Image
-import keras
-from keras import backend as K
-from keras.models import Sequential
-from keras.models import load_model
-from keras.preprocessing.image import ImageDataGenerator
-from keras.preprocessing.image import img_to_array
-from flask import request
-from flask import jsonify
+import os
+from flask import Flask, request, render_template
 from keras.models import model_from_json
 from keras.optimizers import Adam
+import cv2
 
 app = Flask(__name__)
 
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-@app.route('/')
-def hello_world():
-    return render_template('home.html')
+@app.route("/")
+def index():
+    return render_template("upload.html")
 
-
-def get_model():
-    global model
+@app.route("/upload", methods=["POST"])
+def upload():
     global loaded_model
+    global model
     # loading saved model
-
+    print(" * Loading Keras model...")
     json_file = open('model.json', 'r')
     loaded_model_json = json_file.read()
     json_file.close()
@@ -38,40 +30,79 @@ def get_model():
     print("Model Loaded")
 
 
-def preprocess_image(image, target_size):
+    target = os.path.join(APP_ROOT, 'images/')
+    print('Saving Uploaded image into Images Directory')
+    if not os.path.isdir(target):
+        os.mkdir(target)
+    global destination
+    for file in request.files.getlist("file"):
+        print(file)
+        filename = file.filename
+        destination = "/".join([target, filename])
+        print(destination)
+        file.save(destination)
+    print('Image Saved')
+    #replacing '\' with '\\' to avoid reading it as a special character
+    print('Converting Path text to Raw Path Text')
+    print(destination)
+    dest = destination.replace("\\", "\\\\")
+    dest1 = dest.replace("//", "\\\\")
+    print("done converting")
+    print(dest1)
+    print('Reading Image')
+    image = cv2.imread(dest1)
+    print('Resizing image to 96x96')
+    image = cv2.resize(image, (96, 96))
+    print('Converting image into Numpy array')
+    np_image = np.array(image)
+    print('Setting Numpy array dimensions')
+    y = np.expand_dims(np_image, axis=0)
+    print('Predicting')
+    pred = loaded_model.predict(y)
+    print(pred)
+    print('It is predicted as:')
 
-    image = image.resize(target_size)
-    image = img_to_array(image)
-    image = np.expand_dims(image, axis=0)
+    y_pred_binary = pred.argmax(axis=1)
+    print(y_pred_binary)
 
-    return image
+    if y_pred_binary == [0]:
+        print("Black-Grass")
+        y_pred_word = "Black-Grass"
+    elif y_pred_binary == [1]:
+        print("Charlock")
+        y_pred_word = "Charlock"
+    elif y_pred_binary == [2]:
+        print("Cleavers")
+        y_pred_word = "Cleavers"
+    elif y_pred_binary == [3]:
+        print("Common Chickweed")
+        y_pred_word = "Common Chickweed"
+    elif y_pred_binary == [4]:
+        print("Common Wheat")
+        y_pred_word = "Common Wheat"
+    elif y_pred_binary == [5]:
+        print("Fat Hen")
+        y_pred_word = "Fat Hen"
+    elif y_pred_binary == [6]:
+        print("Loose silky-bent")
+        y_pred_word = "Loose silky-bent"
+    elif y_pred_binary == [7]:
+        print("Maize")
+        y_pred_word = "Maize"
+    elif y_pred_binary == [8]:
+        print("Scentless Mayweed")
+        y_pred_word = "Scentless Mayweed"
+    elif y_pred_binary == [9]:
+        print("Shepherd's Purse")
+        y_pred_word = "Shephers's Purse"
+    elif y_pred_binary == [10]:
+        print("Small-flowered Cranesbill")
+        y_pred_word = "Small-flowered Cranesbill"
+    elif y_pred_binary == [11]:
+        print("Sugar beet")
+        y_pred_word = "Sugar beet"
 
-
-print(" * Loading Keras model...")
-get_model()
-
-
-@app.route("/predict", methods=["POST"])
-def predict():
-    message = request.get_json(force=True)
-    encoded = message['image']
-    decoded = base64.b64decode(encoded)
-    image = Image.open(io.BytesIO(decoded))
-    processed_image = preprocess_image(image, target_size=(96, 96))
-
-    predic = loaded_model.predict(processed_image).tolist()
-    prediction = predic.argmax(axis=1)
-
-    response = {
-        'prediction':
-             prediction
-
-
-    }
-    return jsonify(response)
-
-
-
+    return render_template("result.html",prediction = y_pred_word)
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

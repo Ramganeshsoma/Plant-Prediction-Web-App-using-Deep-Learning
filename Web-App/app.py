@@ -102,7 +102,7 @@ def upload():
         print("Sugar beet")
         y_pred_word = "Sugar beet"
 
-    return render_template("result.html",prediction = y_pred_word)
+    return render_template("results.html",prediction = y_pred_word)
 
 if __name__ == '__main__':
     app.run(debug=True)
